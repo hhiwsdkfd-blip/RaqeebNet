@@ -13,11 +13,12 @@ concurrency:
 
 jobs:
   build:
-    name: Build Debug APK
+    name: Build & Test RaqeebNet
     runs-on: ubuntu-latest
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -27,35 +28,71 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        run: |
+          if [ -z "$ANDROID_HOME" ]; then
+            if [ -d "/usr/local/lib/android/sdk" ]; then
+              export ANDROID_HOME="/usr/local/lib/android/sdk"
+            elif [ -d "$HOME/Android/Sdk" ]; then
+              export ANDROID_HOME="$HOME/Android/Sdk"
+            fi
+            echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          fi
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+
+          echo "Accepting Android SDK licenses..."
+          yes | sdkmanager --licenses || true
+
+      - name: Restore Debug Keystore
+        run: |
+          if [ -f "debug.keystore.base64" ] && [ ! -f "debug.keystore" ]; then
+            echo "Restoring debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f "debug.keystore" ]; then
+            echo "Generating fallback debug keystore for signing..."
+            keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          chmod 600 debug.keystore
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: |
+          chmod +x gradlew
 
       - name: Validate Gradle Wrapper
         uses: gradle/actions/wrapper-validation@v4
 
-      - name: Grant Execute Permission to Gradle Wrapper
+      - name: Run Unit Tests
         run: |
-          if [ -f "./gradlew" ]; then
-            chmod +x gradlew
-          else
-            echo "Generating Gradle wrapper..."
-            gradle wrapper --gradle-version 8.11.1
-            chmod +x gradlew
-          fi
+          echo "Running unit and Robolectric tests..."
+          ./gradlew testDebugUnitTest --no-daemon
 
-      - name: Build Debug APK
+      - name: Assemble Debug APK
         run: |
+          echo "Building RaqeebNet Debug APK..."
           ./gradlew assembleDebug --stacktrace --no-daemon
 
-      - name: Verify APK Existence
+      - name: Verify APK Generated
         id: verify_apk
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "Searching for APK in app/build/outputs/apk/debug..."
+            APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -n 1)
+          fi
+
           if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
-            echo "::error::Debug APK was not found at app/build/outputs/apk/debug!"
+            echo "::error::Debug APK was not found in app/build/outputs/apk/debug!"
             exit 1
           fi
-          echo "Found APK: $APK_PATH"
+
+          FILE_SIZE=$(stat -c%s "$APK_PATH" 2>/dev/null || stat -f%z "$APK_PATH" 2>/dev/null || wc -c < "$APK_PATH")
+          if [ "$FILE_SIZE" -le 1000 ]; then
+            echo "::error::Generated APK is empty or corrupted (size: $FILE_SIZE bytes)!"
+            exit 1
+          fi
+
+          echo "APK successfully verified at: $APK_PATH (Size: $FILE_SIZE bytes)"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Upload RaqeebNet Debug APK Artifact
