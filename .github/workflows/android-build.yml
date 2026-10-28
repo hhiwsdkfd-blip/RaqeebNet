@@ -1,19 +1,35 @@
-name: RaqeebNet Android Build
+name: RaqeebNet Android Build & Release
 
 on:
   push:
     branches: [ "main", "master" ]
+    tags:
+      - "v*"
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'إنشاء إصدار جديد في GitHub Releases (Releases)'
+        required: false
+        type: boolean
+        default: false
+      tag_name:
+        description: 'اسم وسم الإصدار (مثال: v1.0.0)'
+        required: false
+        type: string
+        default: 'v1.0.0'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
-    name: Build & Test RaqeebNet
+    name: Build, Test & Release RaqeebNet
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
@@ -95,10 +111,62 @@ jobs:
           echo "APK successfully verified at: $APK_PATH (Size: $FILE_SIZE bytes)"
           echo "apk_path=$APK_PATH" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare Named Release APK
+        id: prepare_release
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [ "${{ inputs.create_release }}" = "true" ] && [ -n "${{ inputs.tag_name }}" ]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="v1.0.0"
+          fi
+
+          # Name the APK as requested: RaqeebNet-v1.0.0.apk
+          RELEASE_APK_NAME="RaqeebNet-${TAG}.apk"
+          RELEASE_DIR="app/build/outputs/apk/release_assets"
+          mkdir -p "$RELEASE_DIR"
+          RELEASE_APK_PATH="${RELEASE_DIR}/${RELEASE_APK_NAME}"
+
+          cp "${{ steps.verify_apk.outputs.apk_path }}" "${RELEASE_APK_PATH}"
+          echo "Prepared release APK at: $RELEASE_APK_PATH"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "release_apk_name=$RELEASE_APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "release_apk_path=$RELEASE_APK_PATH" >> "$GITHUB_OUTPUT"
+
       - name: Upload RaqeebNet Debug APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: RaqeebNet-Debug-APK
-          path: ${{ steps.verify_apk.outputs.apk_path }}
+          path: ${{ steps.prepare_release.outputs.release_apk_path }}
           if-no-files-found: error
           retention-days: 14
+
+      - name: Publish GitHub Release with APK
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release == true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare_release.outputs.tag }}
+          name: رقيب نت ${{ steps.prepare_release.outputs.tag }} (RaqeebNet)
+          body: |
+            ## 📱 تطبيق رقيب نت (RaqeebNet) - النسخة الرسمية القابلة للتثبيت
+
+            تطبيق أندرويد أصلي (Android Native) متكامل لمراقبة الشبكات والإنترنت واكتشاف الأجهزة وإدارة الاستهلاك.
+
+            ### 📥 التحميل والتثبيت على هاتفك:
+            قم بتنزيل ملف **`${{ steps.prepare_release.outputs.release_apk_name }}`** من قسم **Assets** أدناه، ثم انقر عليه في هاتفك لتثبيته مباشرة.
+
+            ### ✨ أبرز الوظائف والمميزات:
+            - **واجهة عربية كاملة (RTL)** متوافقة مع الهواتف الذكية مع دعم الوضع الداكن والفاتح.
+            - **مراقبة حقيقية لاستهلاك الهاتف** عبر عدادات النظام الرسمية `TrafficStats` لحساب التنزيل (Rx) والرفع (Tx) والسرعة اللحظية.
+            - **فاحص الأجهزة المحلية (Subnet Scanner)** لاكتشاف كافة الأجهزة المتصلة بالراوتر مع قياس سرعة الاستجابة (Ping) وتحديد نوع الجهاز.
+            - **حماية وتشفير بيانات الاتصال والمودم** باستخدام مستودع المفاتيح الآمن **Android KeyStore** (AES-256 GCM).
+            - **تقارير بيانية تفاعلية** لحركة البيانات يومياً وأسبوعياً وشهرياً.
+
+            ---
+            *تم البناء والتحقق التلقائي بنجاح عبر GitHub Actions.*
+          files: ${{ steps.prepare_release.outputs.release_apk_path }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
