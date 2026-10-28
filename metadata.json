@@ -1,0 +1,6 @@
+{
+  "name": "رقيب نت",
+  "description": "تطبيق مراقبة الشبكات والإنترنت، اكتشاف الأجهزة، متابعة استهلاك البيانات وإدارة الاتصال",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

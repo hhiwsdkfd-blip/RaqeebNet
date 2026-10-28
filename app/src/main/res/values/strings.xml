@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">رقيب نت</string>
+    <string name="app_name_en">RaqeebNet</string>
+    <string name="app_tagline">المنظومة الاحترافية لمراقبة الشبكات والإنترنت</string>
+    <string name="nav_dashboard">الرئيسية</string>
+    <string name="nav_devices">الأجهزة</string>
+    <string name="nav_reports">التقارير</string>
+    <string name="nav_connection">الاتصال</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="status_connected_wifi">متصل بشبكة Wi-Fi</string>
+    <string name="status_connected_cellular">متصل ببيانات الجوال</string>
+    <string name="status_disconnected">غير متصل بالشبكة</string>
+    <string name="status_unknown">حالة الشبكة غير معروفة</string>
+    <string name="no_data_yet">لم يتم جلب البيانات بعد</string>
+    <string name="device_consumption_title">استهلاك هذا الهاتف</string>
+    <string name="network_scan_title">فحص الشبكة والأجهزة</string>
+    <string name="refresh">تحديث</string>
+    <string name="scan_network">فحص الشبكة</string>
+    <string name="scanning">جاري الفحص...</string>
+    <string name="search_devices_hint">بحث بالاسم، الـ IP أو الماك...</string>
+    <string name="save_profile">حفظ إعدادات الاتصال</string>
+    <string name="test_connection">اختبار الاتصال</string>
+</resources>
